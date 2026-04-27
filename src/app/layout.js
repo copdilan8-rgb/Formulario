@@ -13,7 +13,8 @@ const geistMono = Geist_Mono({
 
 export const metadata = {
   title: {
-    default: "LN Dashboard",
+    default: "Formulario de Reclutamiento",
+    description: "Sistema de postulación laboral",
     template: "%s | LN Dashboard",
   },
   description: "Sistema web de gestión y visualización para clínica.",
