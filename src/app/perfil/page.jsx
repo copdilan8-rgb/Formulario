@@ -1,246 +1,194 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useState } from "react";
 
-import PerfilHeader from "@/components/perfil/PerfilHeader";
-import AvatarUploader from "@/components/perfil/AvatarUploader";
-import PerfilForm from "@/components/perfil/PerfilForm";
-
-import { obtenerUsuarioActual, cerrarSesion } from "@/services/auth";
-import { obtenerPerfil, actualizarPerfil } from "@/services/perfil";
-import { subirAvatar } from "@/services/storage";
-
-import { comprimirImagen } from "@/lib/image";
+import PasoNombre from "./steps/PasoNombre";
+import PasoTelefono from "./steps/PasoTelefono";
+import PasoCiudad from "./steps/PasoCiudad";
+import PasoPuesto from "./steps/PasoPuesto";
+import PasoHabilidades from "./steps/PasoHabilidades";
+import PasoEducacionExperiencia from "./steps/PasoEducacionExperiencia";
+import PasoFuente from "./steps/PasoFuente";
+import PasoDocumentos from "./steps/PasoDocumentos";
 
 export default function PerfilPage() {
-  const router = useRouter();
+  const [step, setStep] = useState(1);
 
-  const [usuario, setUsuario] = useState(null);
-  const [perfil, setPerfil] = useState(null);
+  const [formData, setFormData] = useState({
+    nombre: "",
+    telefono: "",
+    ciudad: "",
+    puesto: "",
+    nivelEducativo: "",
+    experiencia: "",
+    fuente: "",
+    habilidades: [],
+    cv: "",
+    ci: "",
+    certificados: "",
+  });
 
-  const [nombreCompleto, setNombreCompleto] = useState("");
-  const [nombreUsuario, setNombreUsuario] = useState("");
-  const [avatarUrl, setAvatarUrl] = useState("");
-
-  const [loading, setLoading] = useState(true);
-  const [guardando, setGuardando] = useState(false);
-  const [subiendoAvatar, setSubiendoAvatar] = useState(false);
-  const [cerrandoSesion, setCerrandoSesion] = useState(false);
-
-  const [error, setError] = useState("");
-  const [mensaje, setMensaje] = useState("");
-
-  useEffect(() => {
-    const cargarDatos = async () => {
-      try {
-        setLoading(true);
-        setError("");
-        setMensaje("");
-
-        const user = await obtenerUsuarioActual();
-
-        if (!user) {
-          router.push("/login");
-          return;
-        }
-
-        setUsuario(user);
-
-        const dataPerfil = await obtenerPerfil(user.id);
-        setPerfil(dataPerfil);
-        setNombreCompleto(dataPerfil?.nombre_completo || "");
-        setNombreUsuario(dataPerfil?.nombre_usuario || "");
-        setAvatarUrl(dataPerfil?.avatar_url || "");
-      } catch {
-        router.push("/login");
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    cargarDatos();
-  }, [router]);
-
-  const inicialAvatar = useMemo(() => {
-    if (usuario?.email) {
-      return usuario.email.charAt(0).toUpperCase();
-    }
-    return "U";
-  }, [usuario]);
-
-  const limpiarMensajes = () => {
-    if (error) setError("");
-    if (mensaje) setMensaje("");
+  const updateForm = (campo, valor) => {
+    setFormData((prev) => ({
+      ...prev,
+      [campo]: valor,
+    }));
   };
 
-  const validarNombreUsuario = (valor) => {
-    return /^[a-zA-Z0-9_.-]+$/.test(valor);
-  };
-
-  const handleSubirAvatar = async (e) => {
-    try {
-      limpiarMensajes();
-
-      const archivoOriginal = e.target.files?.[0];
-      if (!archivoOriginal) return;
-
-      if (!usuario?.id) {
-        setError("No hay usuario autenticado.");
-        return;
-      }
-
-      if (!archivoOriginal.type.startsWith("image/")) {
-        setError("Solo se permiten imágenes.");
-        return;
-      }
-
-      setSubiendoAvatar(true);
-
-      const archivoComprimido = await comprimirImagen(archivoOriginal);
-      const nuevaAvatarUrl = await subirAvatar(usuario.id, archivoComprimido);
-
-      await actualizarPerfil(usuario.id, {
-        avatar_url: nuevaAvatarUrl,
-      });
-
-      setAvatarUrl(nuevaAvatarUrl);
-      setPerfil((prev) => ({
-        ...prev,
-        avatar_url: nuevaAvatarUrl,
-      }));
-    } catch (err) {
-      setError(err.message || "Ocurrió un error al subir la imagen.");
-    } finally {
-      setSubiendoAvatar(false);
-      e.target.value = "";
-    }
-  };
-
-  const handleGuardarPerfil = async (e) => {
-    e.preventDefault();
-
-    try {
-      setGuardando(true);
-      limpiarMensajes();
-
-      const nombreCompletoLimpio = nombreCompleto.trim();
-      const nombreUsuarioLimpio = nombreUsuario.trim();
-
-      if (!nombreCompletoLimpio) {
-        setError("El nombre completo es obligatorio.");
-        return;
-      }
-
-      if (!nombreUsuarioLimpio) {
-        setError("El nombre de usuario es obligatorio.");
-        return;
-      }
-
-      if (nombreUsuarioLimpio.length < 3) {
-        setError("El nombre de usuario debe tener al menos 3 caracteres.");
-        return;
-      }
-
-      if (!validarNombreUsuario(nombreUsuarioLimpio)) {
-        setError(
-          "El nombre de usuario solo puede contener letras, números, puntos, guiones y guion bajo."
-        );
-        return;
-      }
-
-      await actualizarPerfil(usuario.id, {
-        nombre_completo: nombreCompletoLimpio,
-        nombre_usuario: nombreUsuarioLimpio,
-      });
-
-      setPerfil((prev) => ({
-        ...prev,
-        nombre_completo: nombreCompletoLimpio,
-        nombre_usuario: nombreUsuarioLimpio,
-      }));
-    } catch (err) {
-      setError(err.message || "Ocurrió un error al guardar los cambios.");
-    } finally {
-      setGuardando(false);
-    }
-  };
-
-  const handleCerrarSesion = async () => {
-    try {
-      setCerrandoSesion(true);
-      limpiarMensajes();
-
-      await cerrarSesion();
-      router.push("/login");
-    } catch (err) {
-      setError(err.message || "No se pudo cerrar la sesión.");
-    } finally {
-      setCerrandoSesion(false);
-    }
-  };
-
-  const handleIrATareas = () => {
-    router.push("/tareas");
-  };
-
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center px-4">
-        <p className="text-sm text-muted-foreground">Cargando perfil...</p>
-      </div>
-    );
-  }
+  const nextStep = () => setStep((prev) => prev + 1);
+  const prevStep = () => setStep((prev) => prev - 1);
 
   return (
-    <div className="min-h-screen px-4 py-10">
-      <div className="mx-auto w-full max-w-2xl rounded-2xl border p-6 shadow-sm">
-        <PerfilHeader
-          cerrandoSesion={cerrandoSesion}
-          onCerrarSesion={handleCerrarSesion}
-        />
+    <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
+      <div className="w-full max-w-xl bg-white p-8 rounded-2xl shadow-md">
 
-        <div className="mb-6 flex justify-end">
-          <button
-            type="button"
-            onClick={handleIrATareas}
-            className="rounded-lg bg-black px-4 py-2 text-sm font-medium text-white hover:opacity-90"
-          >
-            Ver tareas
-          </button>
+        {/* 🔷 HEADER */}
+        <div className="text-center mb-6">
+          <h1 className="text-3xl font-bold">Proceso de Postulación</h1>
+          <p className="text-gray-500 mt-2 text-sm">
+            Completa la información para iniciar tu proceso de selección.
+          </p>
         </div>
 
-        {error && (
-          <div className="mb-4 rounded-md border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-600">
-            {error}
+        {/* 🔷 PROGRESO */}
+        <div className="mb-6">
+          <div className="flex justify-between text-xs text-gray-500 mb-1">
+            <span>Paso {step} de 10</span>
+            <span>{Math.round((step / 10) * 100)}%</span>
           </div>
-        )}
 
-        {mensaje && (
-          <div className="mb-4 rounded-md border border-green-300 bg-green-50 px-4 py-3 text-sm text-green-600">
-            {mensaje}
+          <div className="w-full bg-gray-200 h-2 rounded-full">
+            <div
+              className="bg-black h-2 rounded-full transition-all duration-300"
+              style={{ width: `${(step / 10) * 100}%` }}
+            />
           </div>
-        )}
+        </div>
 
-        <AvatarUploader
-          avatarUrl={avatarUrl}
-          inicialAvatar={inicialAvatar}
-          subiendoAvatar={subiendoAvatar}
-          onUpload={handleSubirAvatar}
-          nombreUsuario={nombreUsuario}
-          setNombreUsuario={setNombreUsuario}
-          limpiarMensajes={limpiarMensajes}
-          email={usuario?.email}
-        />
+        {/* 🔷 CONTENIDO */}
+        <div className="min-h-[180px] flex flex-col justify-center items-center text-center">
 
-        <PerfilForm
-          nombreCompleto={nombreCompleto}
-          setNombreCompleto={setNombreCompleto}
-          limpiarMensajes={limpiarMensajes}
-          rol={perfil?.rol}
-          guardando={guardando}
-          onSubmit={handleGuardarPerfil}
-        />
+          {/* PASO 1 - INTRO */}
+          {step === 1 && (
+            <>
+              <h2 className="text-xl font-semibold mb-2">
+                Comencemos con tu información básica
+              </h2>
+
+              <p className="text-sm text-gray-500 mb-4">
+                Este proceso tomará menos de 2 minutos.
+              </p>
+
+              <button
+                onClick={nextStep}
+                className="bg-black text-white px-6 py-2 rounded-md hover:opacity-90"
+              >
+                Comenzar
+              </button>
+            </>
+          )}
+
+          {/* PASO 2 - NOMBRE */}
+          {step === 2 && (
+            <PasoNombre
+              formData={formData}
+              updateForm={updateForm}
+              nextStep={nextStep}
+              prevStep={prevStep}
+            />
+          )}
+
+          {/* PASO 3 - TELÉFONO */}
+          {step === 3 && (
+            <PasoTelefono
+              formData={formData}
+              updateForm={updateForm}
+              nextStep={nextStep}
+              prevStep={prevStep}
+            />
+          )}
+
+          {/* PASO 4 - CIUDAD */}
+          {step === 4 && (
+            <PasoCiudad
+              formData={formData}
+              updateForm={updateForm}
+              nextStep={nextStep}
+              prevStep={prevStep}
+            />
+          )}
+
+          {/* PASO 5 - PUESTO */}
+          {step === 5 && (
+            <PasoPuesto
+              formData={formData}
+              updateForm={updateForm}
+              nextStep={nextStep}
+              prevStep={prevStep}
+            />
+          )}
+
+          {/* PASO 6 - HABILIDADES */}
+          {step === 6 && (
+            <PasoHabilidades
+              formData={formData}
+              updateForm={updateForm}
+              nextStep={nextStep}
+              prevStep={prevStep}
+            />
+          )}
+
+          {/* PASO 7 - EDUCACIÓN + EXPERIENCIA */}
+          {step === 7 && (
+            <PasoEducacionExperiencia
+              formData={formData}
+              updateForm={updateForm}
+              nextStep={nextStep}
+              prevStep={prevStep}
+            />
+          )}
+
+          {/* PASO 8 - FUENTE */}
+          {step === 8 && (
+            <PasoFuente
+              formData={formData}
+              updateForm={updateForm}
+              nextStep={nextStep}
+              prevStep={prevStep}
+            />
+          )}
+
+          {/* PASO 9 - DOCUMENTOS */}
+          {step === 9 && (
+            <PasoDocumentos
+              formData={formData}
+              updateForm={updateForm}
+              nextStep={nextStep}
+              prevStep={prevStep}
+            />
+          )}
+
+          {/* PASO 10 - CONFIRMACIÓN */}
+          {step === 10 && (
+            <div className="text-center">
+              <h2 className="text-xl font-semibold mb-2">
+                ¡Postulación enviada!
+              </h2>
+
+              <p className="text-gray-500 text-sm">
+                Gracias por postular. Nuestro equipo revisará tu información y
+                se pondrá en contacto contigo pronto.
+              </p>
+            </div>
+          )}
+
+        </div>
+
+        {/* 🔷 FOOTER */}
+        <div className="mt-6 text-center text-xs text-gray-400">
+          Tus datos serán utilizados únicamente para el proceso de selección.
+        </div>
+
       </div>
     </div>
   );
